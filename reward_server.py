@@ -40,13 +40,22 @@ async def send(writer, response):
 def get_reward(request):
     global waypoints
     request['waypoints'] = waypoints
-    return {
+    response = {
         "op": "RewardResponse",
         "reward": rf.reward_function(request),
-        "position_reward": rf.position_reward(request) if 'position_reward' in dir(rf) else 0,
-        "heading_reward": 0,
-        "speed_reward": 0
+        "ext_rewards": {}
     }
+
+    for fname in dir(rf):
+        if not fname.endswith("_reward"):
+            continue
+
+        func = getattr(rf, fname)
+        response["ext_rewards"][fname] = func(request)
+
+    return response
+
+        
 
 loop = asyncio.get_event_loop()
 coro = asyncio.start_server(handle_stream, '127.0.0.1', port, loop = loop)
