@@ -39,7 +39,7 @@ async def send(writer, response):
 
 def get_reward(request):
     global waypoints
-    request['waypoints'] = waypoints
+    request['waypoints'] = waypoints.copy()
     response = {
         "op": "RewardResponse",
         "reward": rf.reward_function(request),
