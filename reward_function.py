@@ -3,7 +3,10 @@ import math
 reverse_printed = False
 
 def reward_function(params):
-	return position_reward(params)
+	p_reward = position_reward(params)
+	s_reward = speed_reward(params)
+
+	return min(p_reward, s_reward)
 
 def fix_waypoints_error(params):
 	# Read input variables
@@ -28,7 +31,8 @@ def fix_waypoints_error(params):
 			(waypoints[44], waypoints[45]) = (waypoints[45], waypoints[44])
 
 	# AWS document 에는 closest_waypoints가 순서 상관없이 가장 가까운 2개라고 되어 있다.
-	# 이게 찜찜해서 새로 만든다.
+	# waypoints의 간격은 일정하지 않으므로, 이러면 뒤쪽의 2개나 앞쪽의 2개가 될 수도 있다.
+	# 정말로 그런지 확인은 못해봤는데 어쨌든 찜찜하니 다시 계산해서 세팅한다.
 	pt = (params['x'], params['y'])
 	index = -1
 	for i in range(0, len(waypoints) - 1):
@@ -65,35 +69,37 @@ def position_reward(params):
 		return 1e-3
 
 	# 이전부터 앞으로 track 방향이 어떻게 되는지 살펴본다.
-	angle_b2 = get_track_direction(pt, waypoints, closest_waypoints[0], 1.4, False)
-	angle_b1 = get_track_direction(pt, waypoints, closest_waypoints[0], 0.7, False)
-	angle = get_track_direction(pt, waypoints, closest_waypoints[1], 0, True)
-	angle_f1 = get_track_direction(pt, waypoints, closest_waypoints[1], 0.7, True)
-	angle_f2 = get_track_direction(pt, waypoints, closest_waypoints[1], 1.4, True)
+	angle_b2 = get_track_direction(pt, waypoints, closest_waypoints, 1.4, False)
+	angle_b1 = get_track_direction(pt, waypoints, closest_waypoints, 0.7, False)
+	angle_0 = get_track_direction(pt, waypoints, closest_waypoints, 0, True)
+	angle_f1 = get_track_direction(pt, waypoints, closest_waypoints, 0.7, True)
+	angle_f2 = get_track_direction(pt, waypoints, closest_waypoints, 1.4, True)
 
-	# 현재의 트랙방향이 0도가 되도록 기준 다시 잡음
-	# 왼쪽 턴은 마이너스, 오른쪽 턴은 플러스
-	angle_b2_d = get_angle_diff(angle_b2, angle_b1)
-	angle_b1_d = get_angle_diff(angle_b1, angle)
-	angle_f1_d = get_angle_diff(angle, angle_f1)
-	angle_f2_d = get_angle_diff(angle_f1, angle_f2)
+	# 이전 위치와의 각도 차이를 구함
+	# 후방의 왼쪽 턴은 마이너스, 오른쪽 턴은 플러스
+	# 전방의 왼쪽 턴은 플러스, 오른쪽 턴은 마이너스
+	angle_b2_b1 = get_angle_diff(angle_b2, angle_b1)
+	angle_b1_0 = get_angle_diff(angle_b1, angle_0)
+	angle_0_f1 = get_angle_diff(angle_0, angle_f1)
+	angle_f1_f2 = get_angle_diff(angle_f1, angle_f2)
 
-	print("angle diffs: %.2f %.2f 0 %.2f %.2f"%(angle_b2_d, angle_b1_d, angle_f1_d, angle_f2_d))
+	#print("angle diffs: %.2f %.2f 0 %.2f %.2f"%(angle_b2_d, angle_b1_d, angle_f1_d, angle_f2_d))
 
+    # 트랙의 방향을 보고 현재 내가 있어야 할 위치(중심으로부터의 거리)를  찾는다.
 	max_angle = 25
-	r1 = convert_range(-max_angle, max_angle, 1, -1, angle_b2_d) * 0.8
-	r2 = convert_range(-max_angle, max_angle, -1, 1, angle_b1_d)
-	r3 = convert_range(-max_angle, max_angle, -1, 1, angle_f1_d)
-	r4 = convert_range(-max_angle, max_angle, 1, -1, angle_f2_d) * 0.8
+	r1 = convert_range(-max_angle, max_angle, 1, -1, angle_b2_b1) * 0.8
+	r2 = convert_range(-max_angle, max_angle, -1, 1, angle_b1_0)
+	r3 = convert_range(-max_angle, max_angle, -1, 1, angle_0_f1)
+	r4 = convert_range(-max_angle, max_angle, 1, -1, angle_f1_f2) * 0.8
 
-	print("r1: %.2f r2: %.2f r3: %.2f r4: %.2f"%(r1, r2, r3, r4))
+	#print("r1: %.2f r2: %.2f r3: %.2f r4: %.2f"%(r1, r2, r3, r4))
 
 	# 중심으로부터 떨어진 거리. -는 왼쪽, +는 오른쪽. r은 원하는 위치, p는 현재 위치
 	r = (r1 + r2 + r3 + r4) / 3.6 * track_width * 0.4
 	p = -distance_from_center if is_left_of_center else distance_from_center
 	d = abs(p - r)
 
-	print("r: %.2f p: %.2f d: %.2f"%(r, p, d))
+	#print("r: %.2f p: %.2f d: %.2f"%(r, p, d))
 
 	marker1 = track_width * 0.05
 	marker2 = track_width * 0.3
@@ -104,6 +110,59 @@ def position_reward(params):
 		return convert_range(marker1, marker2, 1.0, 0.3, d)
 	else:
 		return convert_range(marker2, marker3, 0.3, 0.05, d)
+
+max_speed = 2 # 이건 자동 세팅된다.
+min_speed = 2
+
+def speed_reward(params):
+	global max_speed, min_speed
+
+	pt = (params['x'], params['y'])
+	waypoints = params['waypoints']
+	closest_waypoints = params['closest_waypoints']
+	track_width = params['track_width']
+	speed = params['speed']
+	heading = params['heading']
+
+	if speed > max_speed:
+		max_speed = speed
+
+
+	# pt가 가는 방향의 연장선
+	pt2 = (math.cos(math.radians(heading)) + pt[0], math.sin(math.radians(heading)) + pt[1])
+
+	# 현재 위치에서 직진할 때 어느 waypoint부터 트랙을 벗어나는지 조사한다.
+	max_joint_to_pt = 2 # 너무 멀리 볼 필요는 없어서...
+	wpindex = closest_waypoints[1]
+	joint_to_waypoint = 0
+	joint_to_pt = 0
+	while joint_to_waypoint < track_width / 2 and joint_to_pt < max_joint_to_pt:
+		wp = waypoints[wpindex]
+
+		joint = get_closest_point_from_line(wp, pt, pt2)
+		joint_to_waypoint = get_distance(wp, joint)
+		joint_to_pt = get_distance(pt, joint)
+
+		wpindex = next_waypoint_index(waypoints, wpindex)
+
+	if joint_to_pt < 0.1:
+		target_speed = min_speed
+	else:
+		target_speed = convert_range(0.1, max_joint_to_pt, min_speed, max_speed, joint_to_pt)
+
+	#print(f'joint_to_pt: {joint_to_pt:.2f} target_speed: {target_speed:.2f}  -- {joint}')
+
+	error = 0.2
+	max_speed_diff = 4
+
+	if abs(speed - target_speed) < error:
+		return 1.0
+
+	if speed < target_speed:
+		return convert_range(target_speed - max_speed_diff, target_speed - error, 0.05, 1, speed)
+	else:
+		return convert_range(target_speed + error, target_speed + max_speed_diff, 1, 0.05, speed)
+
 
 # pt1, pt2 점 2개를 잇는 선과 x축 사이의 각도를 리턴한다.
 # 리턴값은 -180 < r <= 180 사이에 있다.
@@ -177,11 +236,15 @@ def get_closest_point_from_line(pt, lpt1, lpt2):
 	return (lpt1[0] + u * px, lpt1[1] + u * py)
 
 # pt에서 부터 forward 방향으로 distance 떨어진 지점에서의 트랙 방향
-def get_track_direction(pt, waypoints, wpindex, distance, forward):
+def get_track_direction(pt, waypoints, closest_waypoints, distance, forward):
+	wpindex = closest_waypoints[1 if forward else 0]
+
 	prev_wp = None
 	next_wp = waypoints[wpindex]
 
-	distsum = get_distance(pt, next_wp)
+	# 첫번째 waypoint와 pt의 거리는 pt위치에 대응하는 prev/next waypoint 중간 지점과 waypoint간의 거리다.
+	cpt = get_closest_point_from_line(pt, waypoints[closest_waypoints[0]], waypoints[closest_waypoints[1]])
+	distsum = get_distance(cpt, next_wp)
 	while distsum < distance:
 		prev_wp = next_wp
 		wpindex = next_waypoint_index(waypoints, wpindex) if forward else prev_waypoint_index(waypoints, wpindex)
@@ -205,4 +268,7 @@ def convert_range(s1, e1, s2, e2, v):
 	v = e1 if v > e1 else v
 	d1 = e1 - s1
 	d2 = e2 - s2
-	return (v - s1) * d2 / float(d1) + s2
+	if d1 == 0:
+		return (s2 + e2) / 2.0
+	else:
+		return (v - s1) * d2 / float(d1) + s2
