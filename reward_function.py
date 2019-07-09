@@ -6,7 +6,8 @@ def reward_function(params):
 	p_reward = position_reward(params)
 	s_reward = speed_reward(params)
 
-	return min(p_reward, s_reward)
+	#return min(p_reward, s_reward)
+	return max(0.001, p_reward * s_reward)
 
 def fix_waypoints_error(params):
 	# Read input variables
@@ -117,6 +118,9 @@ min_speed = 2
 def speed_reward(params):
 	global max_speed, min_speed
 
+	if max_speed < 5:
+		print('MAXSPEED is', max_speed)
+
 	pt = (params['x'], params['y'])
 	waypoints = params['waypoints']
 	closest_waypoints = params['closest_waypoints']
@@ -153,15 +157,18 @@ def speed_reward(params):
 	#print(f'joint_to_pt: {joint_to_pt:.2f} target_speed: {target_speed:.2f}  -- {joint}')
 
 	error = 0.2
-	max_speed_diff = 4
+	max_speed_diff = 3
+	min_score = 0.05
+	max_score = convert_range(min_speed, max_speed, min_score, 1, target_speed)
+	
 
 	if abs(speed - target_speed) < error:
-		return 1.0
+		return max_score
 
 	if speed < target_speed:
-		return convert_range(target_speed - max_speed_diff, target_speed - error, 0.05, 1, speed)
+		return convert_range(target_speed - max_speed_diff, target_speed - error, min_score, max_score, speed)
 	else:
-		return convert_range(target_speed + error, target_speed + max_speed_diff, 1, 0.05, speed)
+		return convert_range(target_speed + error, target_speed + max_speed_diff, max_score, min_score, speed)
 
 
 # pt1, pt2 점 2개를 잇는 선과 x축 사이의 각도를 리턴한다.
