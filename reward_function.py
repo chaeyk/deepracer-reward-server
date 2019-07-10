@@ -5,9 +5,10 @@ reverse_printed = False
 def reward_function(params):
 	p_reward = position_reward(params)
 	s_reward = speed_reward(params)
+	d_reward = direction_reward(params)
 
-	#return min(p_reward, s_reward)
-	return max(0.001, p_reward * s_reward)
+	#return min(p_reward, s_reward, d_reward)
+	return max(0.001, p_reward * s_reward * d_reward)
 
 def fix_waypoints_error(params):
 	# Read input variables
@@ -106,20 +107,18 @@ def position_reward(params):
 	marker2 = track_width * 0.3
 
 	if d < marker1:
-		return 1.0
+		reward = 1.0
 	elif d < marker2:
-		return convert_range(marker1, marker2, 1.0, 0.3, d)
+		reward = convert_range(marker1, marker2, 1.0, 0.3, d)
 	else:
-		return convert_range(marker2, marker3, 0.3, 0.05, d)
+		reward = convert_range(marker2, marker3, 0.3, 0.05, d)
+	
+	return reward
 
-max_speed = 2 # 이건 자동 세팅된다.
-min_speed = 2
+speeds = []
 
 def speed_reward(params):
-	global max_speed, min_speed
-
-	if max_speed < 5:
-		print('MAXSPEED is', max_speed)
+	global speeds
 
 	pt = (params['x'], params['y'])
 	waypoints = params['waypoints']
@@ -128,9 +127,19 @@ def speed_reward(params):
 	speed = params['speed']
 	heading = params['heading']
 
-	if speed > max_speed:
-		max_speed = speed
+	if speed == 0:
+		print('ZEROSPEED')
+		return 0.001
 
+	if not speed in speeds:
+		speeds.append(speed)
+		speeds.sort()
+
+	max_speed = speeds[-1]
+	min_speed = speeds[0]
+
+	if len(speeds) < 3:
+		print('MAXSPEED is', max_speed)
 
 	# pt가 가는 방향의 연장선
 	pt2 = (math.cos(math.radians(heading)) + pt[0], math.sin(math.radians(heading)) + pt[1])
@@ -154,22 +163,44 @@ def speed_reward(params):
 	else:
 		target_speed = convert_range(0.1, max_joint_to_pt, min_speed, max_speed, joint_to_pt)
 
-	#print(f'joint_to_pt: {joint_to_pt:.2f} target_speed: {target_speed:.2f}  -- {joint}')
+	closest_speed = get_closest_from_list(speeds, target_speed)
 
-	error = 0.2
-	max_speed_diff = 3
-	min_score = 0.05
-	max_score = convert_range(min_speed, max_speed, min_score, 1, target_speed)
-	
+	print(f'joint_to_pt: {joint_to_pt:.2f} target_speed: {target_speed:.2f} closest_speed: {closest_speed:.2f}')
 
-	if abs(speed - target_speed) < error:
-		return max_score
-
-	if speed < target_speed:
-		return convert_range(target_speed - max_speed_diff, target_speed - error, min_score, max_score, speed)
+	if is_close_enough(speed, closest_speed):
+		reward = 1.0
+	elif speed < closest_speed:
+		reward = max(0.001, convert_range(0, closest_speed, -0.3, 1, speed))
 	else:
-		return convert_range(target_speed + error, target_speed + max_speed_diff, max_score, min_score, speed)
+		reward = convert_range(closest_speed, closest_speed * 2.2, 1, 0, speed)
 
+	return max(0.001, reward)
+
+def direction_reward(params):
+	pt = (params['x'], params['y'])
+	waypoints = params['waypoints']
+	closest_waypoints = params['closest_waypoints']
+	heading = params['heading']
+
+	angle_b1 = get_track_direction(pt, waypoints, closest_waypoints, 0.7, False)
+	angle_0 = get_track_direction(pt, waypoints, closest_waypoints, 0, True)
+	angle_f1 = get_track_direction(pt, waypoints, closest_waypoints, 0.7, True)
+
+	angle_b1_0 = get_angle_diff(angle_b1, angle_0)
+	angle_0_f1 = get_angle_diff(angle_0, angle_f1)
+
+	angle_heading_0 = get_angle_diff(heading, angle_0)
+
+	straight = abs(angle_b1_0) < 5 and abs(angle_0_f1) < 5
+
+	print(f'straight: {straight}, angle_heading_0: {angle_heading_0:.2f}')
+
+	if straight:
+		reward = convert_range(5, 25, 1, 0.001, abs(angle_heading_0))
+	else:
+		reward = convert_range(20, 40, 1, 0.001, abs(angle_heading_0))
+
+	return reward
 
 # pt1, pt2 점 2개를 잇는 선과 x축 사이의 각도를 리턴한다.
 # 리턴값은 -180 < r <= 180 사이에 있다.
@@ -279,3 +310,19 @@ def convert_range(s1, e1, s2, e2, v):
 		return (s2 + e2) / 2.0
 	else:
 		return (v - s1) * d2 / float(d1) + s2
+
+def get_closest_from_list(values, target):
+	min_distance = 100000000
+	closest_value = 0
+	for v in values:
+		distance = abs(v - target)
+		if (distance <= min_distance):
+			min_distance = distance
+			closest_value = v
+
+	return closest_value
+
+# v1과 v2가 충분히 가까우면 true 리턴
+# 나눗셈 등으로 발생한 실수 값들은 오차가 있을 수 있으므로 이걸 사용해 비교한다.
+def is_close_enough(v1, v2):
+	return abs(v1 - v2) < 0.1
