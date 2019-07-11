@@ -12,6 +12,8 @@ def reward_function(params):
 	#return min(p_reward, s_reward, d_reward)
 	return max(0.001, p_reward * s_reward * d_reward)
 
+forward_waypoints = None
+reverse_waypoints = None
 
 def fix_waypoints_error(params):
 	# Read input variables
@@ -61,59 +63,19 @@ def fix_waypoints_error(params):
 	params['closest_waypoints'] = closest_waypoints
 
 def position_reward(params):
-	pt = (params['x'], params['y'])
-	waypoints = params['waypoints']
-	closest_waypoints = params['closest_waypoints']
 	track_width = params['track_width']
 	distance_from_center = params['distance_from_center']
-	is_left_of_center = params['is_left_of_center']
 
-	marker3 = track_width * 0.48
-	if distance_from_center > marker3:
-		return 1e-3
+	marker1 = track_width / 2 * 0.2
+	marker2 = track_width / 2 * 0.4
 
-	# 이전부터 앞으로 track 방향이 어떻게 되는지 살펴본다.
-	angle_b2 = get_track_direction(pt, waypoints, closest_waypoints, 1.4, False)
-	angle_b1 = get_track_direction(pt, waypoints, closest_waypoints, 0.7, False)
-	angle_0 = get_track_direction(pt, waypoints, closest_waypoints, 0, True)
-	angle_f1 = get_track_direction(pt, waypoints, closest_waypoints, 0.7, True)
-	angle_f2 = get_track_direction(pt, waypoints, closest_waypoints, 1.4, True)
-
-	# 이전 위치와의 각도 차이를 구함
-	# 왼쪽으로 구부러지면 마이너스, 반대쪽은 플러스
-	angle_b2_b1 = get_angle_diff(angle_b2, angle_b1)
-	angle_b1_0 = get_angle_diff(angle_b1, angle_0)
-	angle_0_f1 = get_angle_diff(angle_0, angle_f1)
-	angle_f1_f2 = get_angle_diff(angle_f1, angle_f2)
-
-	print("angle diffs: %.2f %.2f 0 %.2f %.2f"%(angle_b2_b1, angle_b1_0, angle_0_f1, angle_f1_f2))
-
-    # 트랙의 방향을 보고 현재 내가 있어야 할 위치(중심으로부터의 거리)를  찾는다.
-	max_angle = 25
-	r1 = convert_range(-max_angle, max_angle, 1, -1, angle_b2_b1) * 0.8
-	r2 = convert_range(-max_angle, max_angle, -1, 1, angle_b1_0)
-	r3 = convert_range(-max_angle, max_angle, -1, 1, angle_0_f1)
-	r4 = convert_range(-max_angle, max_angle, 1, -1, angle_f1_f2) * 0.8
-
-	#print("r1: %.2f r2: %.2f r3: %.2f r4: %.2f"%(r1, r2, r3, r4))
-
-	# 중심으로부터 떨어진 거리. -는 왼쪽, +는 오른쪽. r은 원하는 위치, p는 현재 위치
-	r = (r1 + r2 + r3 + r4) / 3.6 * track_width * 0.4
-	p = -distance_from_center if is_left_of_center else distance_from_center
-	d = abs(p - r)
-
-	#print("r: %.2f p: %.2f d: %.2f"%(r, p, d))
-
-	marker1 = track_width * 0.05
-	marker2 = track_width * 0.3
-
-	if d < marker1:
-		reward = 1.0
-	elif d < marker2:
-		reward = convert_range(marker1, marker2, 1.0, 0.3, d)
+	if distance_from_center < marker1:
+		reward = convert_range(0, marker1, 1, 0.9, distance_from_center)
+	elif distance_from_center < marker2:
+		reward = convert_range(marker1, marker2, 0.5, 0.2, distance_from_center)
 	else:
-		reward = convert_range(marker2, marker3, 0.3, 0.05, d)
-	
+		reward = 0.001
+
 	return reward
 
 speeds = []
@@ -193,25 +155,21 @@ def direction_reward(params):
 	closest_waypoints = params['closest_waypoints']
 	heading = params['heading']
 
-	angle_b1 = get_track_direction(pt, waypoints, closest_waypoints, 0.7, False)
 	angle_0 = get_track_direction(pt, waypoints, closest_waypoints, 0, True)
-	angle_f1 = get_track_direction(pt, waypoints, closest_waypoints, 0.7, True)
+	angle_diff = abs(get_angle_diff(heading, angle_0))
 
-	angle_b1_0 = get_angle_diff(angle_b1, angle_0)
-	angle_0_f1 = get_angle_diff(angle_0, angle_f1)
+	marker1 = 12
+	marker2 = 20
 
-	angle_heading_0 = get_angle_diff(heading, angle_0)
-
-	straight = abs(angle_b1_0) < 5 and abs(angle_0_f1) < 5
-
-	#print('straight: %.2f, angle_heading_0: %.2f'%(straight, angle_heading_0)
-
-	if straight:
-		reward = convert_range(5, 25, 1, 0.001, abs(angle_heading_0))
+	if angle_diff < marker1:
+		reward = convert_range(0, marker1, 1, 0.9, angle_diff)
+	elif angle_diff < marker2:
+		reward = convert_range(marker1, marker2, 0.5, 0.2, angle_diff)
 	else:
-		reward = convert_range(20, 40, 1, 0.001, abs(angle_heading_0))
+		reward = 0.001
 
 	return reward
+
 
 # pt1, pt2 점 2개를 잇는 선과 x축 사이의 각도를 리턴한다.
 # 리턴값은 -180 < r <= 180 사이에 있다.
