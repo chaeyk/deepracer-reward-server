@@ -155,7 +155,8 @@ def speed_reward(params):
 	pt2 = (math.cos(math.radians(heading)) + pt[0], math.sin(math.radians(heading)) + pt[1])
 
 	# 현재 위치에서 직진할 때 어느 waypoint부터 트랙을 벗어나는지 조사한다.
-	max_joint_to_pt = 2 # 너무 멀리 볼 필요는 없어서...
+	max_joint_to_pt = 1.8 # 너무 멀리 볼 필요는 없어서...
+	min_joint_to_pt = 0.5
 	wpindex = closest_waypoints[1]
 	joint_to_waypoint = 0
 	joint_to_pt = 0
@@ -168,14 +169,15 @@ def speed_reward(params):
 
 		wpindex = next_waypoint_index(waypoints, wpindex)
 
-	if joint_to_pt < 0.1:
+	if joint_to_pt < min_joint_to_pt:
 		target_speed = min_speed
 	else:
-		target_speed = convert_range(0.1, max_joint_to_pt, min_speed, max_speed, joint_to_pt)
+		target_speed = convert_range(math.sqrt(min_joint_to_pt), math.sqrt(max_joint_to_pt), min_speed, max_speed, math.sqrt(joint_to_pt))
 
-	closest_speed = get_closest_from_list(speeds, target_speed)
+	closest_speed = target_speed
+	#closest_speed = get_closest_from_list(speeds, target_speed)
 
-	#print('joint_to_pt: %.2f target_speed: %.2f closest_speed: %.2f'%(joint_to_pt, target_speed, closest_speed))
+	print('joint_to_pt: %.2f target_speed: %.2f closest_speed: %.2f'%(joint_to_pt, target_speed, closest_speed))
 
 	if is_close_enough(speed, closest_speed):
 		reward = 1.0
@@ -185,8 +187,6 @@ def speed_reward(params):
 		reward = convert_range(closest_speed, closest_speed * 2.2, 1, 0, speed)
 
 	return max(0.001, reward)
-
-
 def direction_reward(params):
 	pt = (params['x'], params['y'])
 	waypoints = params['waypoints']
