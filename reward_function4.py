@@ -1,6 +1,26 @@
 import math
 
-reverse_printed = False
+def log(*args):
+	print('[chaeyk]', *args)
+
+def debug(*args):
+	if not is_simulator():
+		print('[chaeyk]', *args)
+
+simulator = False
+def is_simulator():
+	return simulator
+
+def set_simulator():
+	global simulator
+	simulator = True
+
+# simulator를 위해 필요하다
+speeds = []
+def set_speeds(l):
+	global speeds
+	speeds = l
+	debug('speeds', speeds)
 
 def reward_function(params):
 	fix_waypoints_error(params)
@@ -12,8 +32,7 @@ def reward_function(params):
 	#return min(p_reward, s_reward, d_reward)
 	return max(0.001, p_reward * s_reward * d_reward)
 
-forward_waypoints = None
-reverse_waypoints = None
+reverse_printed = False
 
 def fix_waypoints_error(params):
 	# Read input variables
@@ -22,7 +41,9 @@ def fix_waypoints_error(params):
 	is_reversed = params['is_reversed']
 
 	if is_reversed:
-		print('REVERSED')
+		if not reverse_printed:
+			reverse_printed = True
+			log('REVERSED')
 		# waypoints 순서를 뒤집어야 한다.
 		if waypoints[0][0] < waypoints[1][0]:
 			waypoints.copy().reverse()
@@ -59,7 +80,7 @@ def fix_waypoints_error(params):
 	closest_waypoints = (index, index + 1)
 	old_closest_waypoints = params['closest_waypoints']
 	if closest_waypoints[0] != old_closest_waypoints[0] or closest_waypoints[1] != old_closest_waypoints[1]:
-		print('closest_waypoints is different with mime: {} != {}'.format(old_closest_waypoints, closest_waypoints))
+		log('closest_waypoints is different with mime: {} != {}'.format(old_closest_waypoints, closest_waypoints))
 	params['closest_waypoints'] = closest_waypoints
 
 def position_reward(params):
@@ -78,14 +99,12 @@ def position_reward(params):
 
 	return reward
 
-speeds = []
-
 def fill_speeds(params):
 	global speeds
 
 	speed = params['speed']
 	if speed == 0:
-		print('ZEROSPEED')
+		log('ZEROSPEED')
 		return 0
 
 	if not speed in speeds:
@@ -93,7 +112,9 @@ def fill_speeds(params):
 		speeds.sort()
 
 	if len(speeds) < 3:
-		print('MAXSPEED is', speeds[-1])
+		log('MAXSPEED is', speeds[-1])
+	elif len(speeds) > 3:
+		log('Something is wrong with speeds:', speeds)
 	
 	return speed
 
@@ -139,7 +160,7 @@ def speed_reward(params):
 	closest_speed = target_speed
 	#closest_speed = get_closest_from_list(speeds, target_speed)
 
-	print('joint_to_pt: %.2f target_speed: %.2f closest_speed: %.2f'%(joint_to_pt, target_speed, closest_speed))
+	debug('joint_to_pt: %.2f target_speed: %.2f closest_speed: %.2f'%(joint_to_pt, target_speed, closest_speed))
 
 	if is_close_enough(speed, closest_speed):
 		reward = 1.0

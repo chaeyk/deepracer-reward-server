@@ -1,13 +1,15 @@
 import asyncio
 import json
 import traceback
-import reward_function as rf
+import importlib
 
 port = 11111
 waypoints = []
+rf = None
 
 async def handle_stream(reader, writer):
-    global waypoints
+    global waypoints, rf
+
     try:
         print("Connected.")
         while True:
@@ -19,9 +21,20 @@ async def handle_stream(reader, writer):
             op = request['op']
             if op == "InitializingData":
                 print("Got InitializingData")
+
+                rf_name = request['rf']
+                print('using module:', rf_name)
+                rf = importlib.import_module(rf_name)
+
+                if hasattr(rf, 'set_simulator'):
+                    rf.set_simulator()
+
                 waypoints = []
                 for wp in request['waypoints']:
                     waypoints.append((wp['X'], wp['Y']))
+
+                if hasattr(rf, 'set_speeds'):
+                    rf.set_speeds(request['speeds'])
             elif op == "RewardRequest":
                 response = get_reward(request)
                 await send(writer, response)
@@ -39,7 +52,7 @@ async def send(writer, response):
 
 def get_reward(request):
     global waypoints
-    request['waypoints'] = waypoints.copy()
+    request['waypoints'] = waypoints
     response = {
         "op": "RewardResponse",
         "reward": rf.reward_function(request),

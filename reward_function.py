@@ -1,6 +1,26 @@
 import math
 
-reverse_printed = False
+def log(*args):
+	print('[chaeyk]', *args)
+
+def debug(*args):
+	if not is_simulator():
+		print('[chaeyk]', *args)
+
+simulator = False
+def is_simulator():
+	return simulator
+
+def set_simulator():
+	global simulator
+	simulator = True
+
+# simulator를 위해 필요하다
+speeds = []
+def set_speeds(l):
+	global speeds
+	speeds = l
+	debug('speeds', speeds)
 
 def reward_function(params):
 	fix_waypoints_error(params)
@@ -12,19 +32,23 @@ def reward_function(params):
 	#return min(p_reward, s_reward, d_reward)
 	return max(0.001, p_reward * s_reward * d_reward)
 
+reverse_printed = False
 
 def fix_waypoints_error(params):
+	global reverse_printed
+
 	# Read input variables
-	waypoints = params['waypoints']
-	#closest_waypoints = params['closest_waypoints']
+	waypoints = params['waypoints'].copy()
+	params['waypoints'] = waypoints
 	is_reversed = params['is_reversed']
 
 	if is_reversed:
-		print('REVERSED')
+		if not reverse_printed:
+			reverse_printed = True
+			log('REVERSED')
 		# waypoints 순서를 뒤집어야 한다.
 		if waypoints[0][0] < waypoints[1][0]:
-			waypoints.copy().reverse()
-			params['waypoints'] = waypoints
+			waypoints.reverse()
 		
 		# reverse이면 waypoint 25, 26의 순서가 바뀌어있다.
 		if waypoints[25][0] > waypoints[26][0]:
@@ -57,7 +81,8 @@ def fix_waypoints_error(params):
 	closest_waypoints = (index, index + 1)
 	old_closest_waypoints = params['closest_waypoints']
 	if closest_waypoints[0] != old_closest_waypoints[0] or closest_waypoints[1] != old_closest_waypoints[1]:
-		print('closest_waypoints is different with mime: {} != {}'.format(old_closest_waypoints, closest_waypoints))
+		log('closest_waypoints is different with mime: {} != {} (pt={})'
+			.format(old_closest_waypoints, closest_waypoints, pt))
 	params['closest_waypoints'] = closest_waypoints
 
 def position_reward(params):
@@ -86,7 +111,7 @@ def position_reward(params):
 	angle_0_f1 = get_angle_diff(angle_0, angle_f1)
 	angle_f1_f2 = get_angle_diff(angle_f1, angle_f2)
 
-	print("angle diffs: %.2f %.2f 0 %.2f %.2f"%(angle_b2_b1, angle_b1_0, angle_0_f1, angle_f1_f2))
+	#debug("angle diffs: %.2f %.2f 0 %.2f %.2f"%(angle_b2_b1, angle_b1_0, angle_0_f1, angle_f1_f2))
 
     # 트랙의 방향을 보고 현재 내가 있어야 할 위치(중심으로부터의 거리)를  찾는다.
 	max_angle = 25
@@ -95,14 +120,14 @@ def position_reward(params):
 	r3 = convert_range(-max_angle, max_angle, -1, 1, angle_0_f1)
 	r4 = convert_range(-max_angle, max_angle, 1, -1, angle_f1_f2) * 0.8
 
-	#print("r1: %.2f r2: %.2f r3: %.2f r4: %.2f"%(r1, r2, r3, r4))
+	#debug("r1: %.2f r2: %.2f r3: %.2f r4: %.2f"%(r1, r2, r3, r4))
 
 	# 중심으로부터 떨어진 거리. -는 왼쪽, +는 오른쪽. r은 원하는 위치, p는 현재 위치
 	r = (r1 + r2 + r3 + r4) / 3.6 * track_width * 0.4
 	p = -distance_from_center if is_left_of_center else distance_from_center
 	d = abs(p - r)
 
-	#print("r: %.2f p: %.2f d: %.2f"%(r, p, d))
+	#debug("r: %.2f p: %.2f d: %.2f"%(r, p, d))
 
 	marker1 = track_width * 0.08
 	marker2 = track_width * 0.25
@@ -116,14 +141,12 @@ def position_reward(params):
 	
 	return reward
 
-speeds = []
-
 def fill_speeds(params):
 	global speeds
 
 	speed = params['speed']
 	if speed == 0:
-		print('ZEROSPEED')
+		log('ZEROSPEED')
 		return 0
 
 	if not speed in speeds:
@@ -131,8 +154,9 @@ def fill_speeds(params):
 		speeds.sort()
 
 	if len(speeds) < 3:
-		print('MAXSPEED is', speeds[-1])
+		log('MAXSPEED is', speeds[-1])
 	
+	debug(speed)
 	return speed
 
 def speed_reward(params):
@@ -177,7 +201,7 @@ def speed_reward(params):
 	closest_speed = target_speed
 	#closest_speed = get_closest_from_list(speeds, target_speed)
 
-	print('joint_to_pt: %.2f target_speed: %.2f closest_speed: %.2f'%(joint_to_pt, target_speed, closest_speed))
+	debug('joint_to_pt: %.2f target_speed: %.2f closest_speed: %.2f'%(joint_to_pt, target_speed, closest_speed))
 
 	if is_close_enough(speed, closest_speed):
 		reward = 1.0
@@ -204,7 +228,8 @@ def direction_reward(params):
 
 	straight = abs(angle_b1_0) < 5 and abs(angle_0_f1) < 5
 
-	#print('straight: %.2f, angle_heading_0: %.2f'%(straight, angle_heading_0)
+	debug('pt:', pt, closest_waypoints)
+	debug('straight: %.2f, angle_heading_0: %.2f'%(straight, angle_heading_0))
 
 	if straight:
 		reward = convert_range(5, 25, 1, 0.001, abs(angle_heading_0))
