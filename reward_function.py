@@ -104,8 +104,8 @@ def position_reward(params):
 
 	#print("r: %.2f p: %.2f d: %.2f"%(r, p, d))
 
-	marker1 = track_width * 0.05
-	marker2 = track_width * 0.3
+	marker1 = track_width * 0.08
+	marker2 = track_width * 0.25
 
 	if d < marker1:
 		reward = 1.0
@@ -156,7 +156,7 @@ def speed_reward(params):
 
 	# 현재 위치에서 직진할 때 어느 waypoint부터 트랙을 벗어나는지 조사한다.
 	max_joint_to_pt = 1.8 # 너무 멀리 볼 필요는 없어서...
-	min_joint_to_pt = 0.5
+	min_joint_to_pt = 0.2
 	wpindex = closest_waypoints[1]
 	joint_to_waypoint = 0
 	joint_to_pt = 0
