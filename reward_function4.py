@@ -251,11 +251,12 @@ def get_distance(pt1, pt2):
 	return math.sqrt(math.pow(pt2[0] - pt1[0], 2) + math.pow(pt2[1] - pt1[1], 2))
 
 # lpt1 - lpt2 를 지나는 선과 pt 와의 거리
+# pt가 lpt1-lpt2의 왼쪽이면 마이너스, 오른쪽이면 플러스 값이 리턴된다.
 def get_line_distance(pt, lpt1, lpt2):
 	px = lpt2[0] - lpt1[0]
 	py = lpt2[1] - lpt1[1]
 	dab = px * px + py * py
-	return abs(py * pt[0] - px * pt[1] + lpt2[0] * lpt1[1] - lpt2[1] * lpt1[0] / math.sqrt(dab))
+	return py * pt[0] - px * pt[1] + lpt2[0] * lpt1[1] - lpt2[1] * lpt1[0] / math.sqrt(dab)
 
 # lpt1 - lpt2 를 지나는 선에서 pt로부터 제일 가까운 점을 찾는다
 def get_closest_point_from_line(pt, lpt1, lpt2):

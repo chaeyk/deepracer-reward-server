@@ -62,6 +62,21 @@ def fix_waypoints_error(params):
 	# waypoints의 간격은 일정하지 않으므로, 이러면 뒤쪽의 2개나 앞쪽의 2개가 될 수도 있다.
 	# 정말로 그런지 확인은 못해봤는데 어쨌든 찜찜하니 다시 계산해서 세팅한다.
 	pt = (params['x'], params['y'])
+	closest_waypoints = get_closest_waypoints(waypoints, pt)
+	old_closest_waypoints = params['closest_waypoints']
+	if closest_waypoints[0] != old_closest_waypoints[0] or closest_waypoints[1] != old_closest_waypoints[1]:
+		log('closest_waypoints is different with mime: {} != {} (pt={})'
+			.format(old_closest_waypoints, closest_waypoints, pt))
+	params['closest_waypoints'] = closest_waypoints
+
+	distance_from_center = get_line_distance(pt, waypoints[closest_waypoints[0]], waypoints[closest_waypoints[1]])
+	is_left_of_center = (distance_from_center <= 0)
+	distance_from_center = abs(distance_from_center)
+
+	params['distance_from_center'] = distance_from_center
+	params['is_left_of_center'] = is_left_of_center
+
+def get_closest_waypoints(waypoints, pt):
 	index = -1
 	for i in range(0, len(waypoints) - 1):
 		prev_wp = waypoints[i]
@@ -78,24 +93,17 @@ def fix_waypoints_error(params):
 	if index == -1:
 		raise Exception('cannot find closest waypoint of {}'.format(pt))
 	
-	closest_waypoints = (index, index + 1)
-	old_closest_waypoints = params['closest_waypoints']
-	if closest_waypoints[0] != old_closest_waypoints[0] or closest_waypoints[1] != old_closest_waypoints[1]:
-		log('closest_waypoints is different with mime: {} != {} (pt={})'
-			.format(old_closest_waypoints, closest_waypoints, pt))
-	params['closest_waypoints'] = closest_waypoints
+	return (index, index + 1)
 
-def position_reward(params):
-	pt = (params['x'], params['y'])
-	waypoints = params['waypoints']
-	closest_waypoints = params['closest_waypoints']
-	track_width = params['track_width']
-	distance_from_center = params['distance_from_center']
-	is_left_of_center = params['is_left_of_center']
+def build_optimal_waypoints(waypoints, track_width):
+	optimal_waypoints = []
+	for wp in waypoints:
+		optimal_waypoints.append(get_optimal_position(waypoints, track_width, wp))
+	return optimal_waypoints
 
-	marker3 = track_width * 0.48
-	if distance_from_center > marker3:
-		return 1e-3
+# 현재 내 위치가 pt일 때, 여기에 대응하는 레코드 라인의 위치를 찾는다
+def get_optimal_position(waypoints, track_width, pt):
+	closest_waypoints = get_closest_waypoints(waypoints, pt)
 
 	# 이전부터 앞으로 track 방향이 어떻게 되는지 살펴본다.
 	angle_b2 = get_track_direction(pt, waypoints, closest_waypoints, 1.4, False)
@@ -122,8 +130,31 @@ def position_reward(params):
 
 	#debug("r1: %.2f r2: %.2f r3: %.2f r4: %.2f"%(r1, r2, r3, r4))
 
-	# 중심으로부터 떨어진 거리. -는 왼쪽, +는 오른쪽. r은 원하는 위치, p는 현재 위치
+	# 중심으로부터 떨어진 거리. -는 왼쪽, +는 오른쪽.
 	r = (r1 + r2 + r3 + r4) / 3.6 * track_width * 0.4
+
+	# optimal position
+	center = get_closest_point_from_line(pt, waypoints[closest_waypoints[0]], waypoints[closest_waypoints[1]])
+	op = rotate_point(center, (center[0], center[1] - r), angle_0)
+
+	return op
+
+def position_reward(params):
+	pt = (params['x'], params['y'])
+	waypoints = params['waypoints']
+	closest_waypoints = params['closest_waypoints']
+	track_width = params['track_width']
+	distance_from_center = params['distance_from_center']
+	is_left_of_center = params['is_left_of_center']
+
+	marker3 = track_width * 0.48
+	if distance_from_center > marker3:
+		return 1e-3
+
+	op = get_optimal_position(waypoints, track_width, pt)
+
+	# 중심으로부터 떨어진 거리. -는 왼쪽, +는 오른쪽. r은 원하는 위치, p는 현재 위치
+	r = get_line_distance(op, waypoints[closest_waypoints[0], closest_waypoints[1]])
 	p = -distance_from_center if is_left_of_center else distance_from_center
 	d = abs(p - r)
 
@@ -295,11 +326,12 @@ def get_distance(pt1, pt2):
 	return math.sqrt(math.pow(pt2[0] - pt1[0], 2) + math.pow(pt2[1] - pt1[1], 2))
 
 # lpt1 - lpt2 를 지나는 선과 pt 와의 거리
+# pt가 lpt1-lpt2의 왼쪽이면 마이너스, 오른쪽이면 플러스 값이 리턴된다.
 def get_line_distance(pt, lpt1, lpt2):
 	px = lpt2[0] - lpt1[0]
 	py = lpt2[1] - lpt1[1]
 	dab = px * px + py * py
-	return abs(py * pt[0] - px * pt[1] + lpt2[0] * lpt1[1] - lpt2[1] * lpt1[0] / math.sqrt(dab))
+	return py * pt[0] - px * pt[1] + lpt2[0] * lpt1[1] - lpt2[1] * lpt1[0] / math.sqrt(dab)
 
 # lpt1 - lpt2 를 지나는 선에서 pt로부터 제일 가까운 점을 찾는다
 def get_closest_point_from_line(pt, lpt1, lpt2):

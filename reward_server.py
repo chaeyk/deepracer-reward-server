@@ -31,12 +31,18 @@ async def handle_stream(reader, writer):
 
                 waypoints = []
                 for wp in request['waypoints']:
-                    waypoints.append((wp['X'], wp['Y']))
+                    waypoints.append(tuple(wp))
 
                 if hasattr(rf, 'set_speeds'):
                     rf.set_speeds(request['speeds'])
+
+                response = get_initialized(request)
+                await send(writer, response)
             elif op == "RewardRequest":
                 response = get_reward(request)
+                await send(writer, response)
+            elif op == "Ping":
+                response = { "op": "Pong" }
                 await send(writer, response)
             else:
                 print("Got Unknown {}".format(request))
@@ -49,6 +55,21 @@ async def handle_stream(reader, writer):
 async def send(writer, response):
     writer.write((json.dumps(response) + "\n").encode('utf-8'))
     await writer.drain()
+
+def get_initialized(request):
+    global waypoints
+
+    optimal_waypoints = []
+    if (hasattr(rf, 'build_optimal_waypoints')):
+        optimal_waypoints = rf.build_optimal_waypoints(waypoints, request['track_width'])
+    else:
+        optimal_waypoints = None
+
+    response = {
+        "op": "InitializedData",
+        "optimal_waypoints": optimal_waypoints
+    }
+    return response
 
 def get_reward(request):
     global waypoints
