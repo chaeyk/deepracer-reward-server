@@ -4,7 +4,7 @@ def log(*args):
 	print('[chaeyk]', *args)
 
 def debug(*args):
-	if not is_simulator():
+	if is_simulator():
 		print('[chaeyk]', *args)
 
 simulator = False
@@ -154,11 +154,11 @@ def position_reward(params):
 	op = get_optimal_position(waypoints, track_width, pt)
 
 	# 중심으로부터 떨어진 거리. -는 왼쪽, +는 오른쪽. r은 원하는 위치, p는 현재 위치
-	r = get_line_distance(op, waypoints[closest_waypoints[0], closest_waypoints[1]])
+	r = get_line_distance(op, waypoints[closest_waypoints[0]], waypoints[closest_waypoints[1]])
 	p = -distance_from_center if is_left_of_center else distance_from_center
 	d = abs(p - r)
 
-	#debug("r: %.2f p: %.2f d: %.2f"%(r, p, d))
+	debug("r: %.2f p: %.2f d: %.2f"%(r, p, d))
 
 	marker1 = track_width * 0.08
 	marker2 = track_width * 0.25
@@ -187,7 +187,6 @@ def fill_speeds(params):
 	if len(speeds) < 3:
 		log('MAXSPEED is', speeds[-1])
 	
-	debug(speed)
 	return speed
 
 def speed_reward(params):
@@ -259,8 +258,8 @@ def direction_reward(params):
 
 	straight = abs(angle_b1_0) < 5 and abs(angle_0_f1) < 5
 
-	debug('pt:', pt, closest_waypoints)
-	debug('straight: %.2f, angle_heading_0: %.2f'%(straight, angle_heading_0))
+	#debug('pt:', pt, closest_waypoints)
+	#debug('straight: %.2f, angle_heading_0: %.2f'%(straight, angle_heading_0))
 
 	if straight:
 		reward = convert_range(5, 25, 1, 0.001, abs(angle_heading_0))
@@ -331,7 +330,7 @@ def get_line_distance(pt, lpt1, lpt2):
 	px = lpt2[0] - lpt1[0]
 	py = lpt2[1] - lpt1[1]
 	dab = px * px + py * py
-	return py * pt[0] - px * pt[1] + lpt2[0] * lpt1[1] - lpt2[1] * lpt1[0] / math.sqrt(dab)
+	return (py * pt[0] - px * pt[1] + lpt2[0] * lpt1[1] - lpt2[1] * lpt1[0]) / math.sqrt(dab)
 
 # lpt1 - lpt2 를 지나는 선에서 pt로부터 제일 가까운 점을 찾는다
 def get_closest_point_from_line(pt, lpt1, lpt2):
