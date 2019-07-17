@@ -59,9 +59,14 @@ async def send(writer, response):
 def get_initialized(request):
     global waypoints
 
+    if hasattr(rf, 'build_waypoints'):
+        fixed_waypoints = rf.build_waypoints(waypoints, request['track_width'])
+    else:
+        fixed_waypoints = waypoints
+
     optimal_waypoints = []
     if (hasattr(rf, 'build_optimal_waypoints')):
-        optimal_waypoints = rf.build_optimal_waypoints(waypoints, request['track_width'])
+        optimal_waypoints = rf.build_optimal_waypoints(fixed_waypoints, request['track_width'])
     else:
         optimal_waypoints = None
 

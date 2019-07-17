@@ -1,12 +1,12 @@
 import math
 
 def log(*args):
-	print('[chaeyk-log]', *args)
+	print('[chaeyk]', *args)
 
 debug_enabled = False
 def debug(*args):
 	if debug_enabled:
-		print('[chaeyk-debug]', *args)
+		print('[chaeyk]', *args)
 
 simulator = False
 def is_simulator():
@@ -28,47 +28,47 @@ rebuilt_waypoints = None
 optimal_waypoints = None
 waypoint_hash = 0
 def fix_params_error(params):
-	global rebuilt_waypoints, optimal_waypoints, reverse_printed, waypoint_hash
+	global rebuilt_waypoints, optimal_waypoints, waypoint_hash
 
 	# Read input variables
 	waypoints = params['waypoints'].copy()
 	is_reversed = params['is_reversed']
 	track_width = params['track_width']
 
-	hash = waypoints[0][0] + waypoints[1][0] + waypoints[2][0]
+	fixed_waypoints = fix_waypoints(waypoints, is_reversed)
+	params['waypoints'] = fixed_waypoints
+
+	hash = fixed_waypoints[0][0] + fixed_waypoints[1][0] + fixed_waypoints[2][0]
 	if hash != waypoint_hash:
-		fixed_waypoints = fix_waypoints(waypoints, is_reversed)
 		rebuilt_waypoints = build_waypoints(fixed_waypoints, track_width)
-		optimal_waypoints = build_optimal_waypoints(rebuilt_waypoints, track_width)
+		optimal_waypoints = build_optimal_waypoints(fixed_waypoints, track_width)
 		waypoint_hash = hash
 		
 	params['waypoints'] = rebuilt_waypoints
-	params['x_optimal_waypoints'] = optimal_waypoints
+	params['optimal_waypoints'] = optimal_waypoints
 
 	# AWS document 에는 closest_waypoints가 순서 상관없이 가장 가까운 2개라고 되어 있다.
 	# waypoints의 간격은 일정하지 않으므로, 이러면 뒤쪽의 2개나 앞쪽의 2개가 될 수도 있다.
 	# 정말로 그런지 확인은 못해봤는데 어쨌든 찜찜하니 다시 계산해서 세팅한다.
 	pt = (params['x'], params['y'])
-	closest_waypoints = find_closest_waypoint_index(pt, rebuilt_waypoints)
+	closest_waypoints = find_closest_waypoint_index(pt, fixed_waypoints)
 	old_closest_waypoints = params['closest_waypoints']
 	if closest_waypoints[0] != old_closest_waypoints[0] or closest_waypoints[1] != old_closest_waypoints[1]:
 		log('closest_waypoints is different with mine: {} != {} (pt={})'
 			.format(old_closest_waypoints, closest_waypoints, pt))
 	params['closest_waypoints'] = closest_waypoints
 
-	distance_from_center = get_distance_to_waypoint(pt, rebuilt_waypoints, closest_waypoints)
+	distance_from_center = get_distance_to_waypoint(pt, fixed_waypoints, closest_waypoints)
 	is_left_of_center = (distance_from_center <= 0)
 	distance_from_center = abs(distance_from_center)
 
 	params['distance_from_center'] = distance_from_center
 	params['is_left_of_center'] = is_left_of_center
 
-	optimal_index = find_closest_waypoint_index(pt, optimal_waypoints)
-	params['x_optimal_index'] = optimal_index
-
 reverse_printed = False
 def fix_waypoints(waypoints, is_reversed):
 	global reverse_printed
+	
 	if is_reversed:
 		if not reverse_printed:
 			reverse_printed = True
@@ -98,7 +98,7 @@ def reward_function(params):
 	d_reward = direction_reward(params)
 
 	#return min(p_reward, s_reward, d_reward)
-	return max(0.001, p_reward * s_reward * d_reward)
+	return max(0.001, p_reward + s_reward * 2 + d_reward)
 
 # 시뮬레이터가 주는 waypoints는 간격도 제멋대로 엉망이라
 # 여기서 다시 촘촘하게 일정한 간격으로 만든다.
@@ -138,121 +138,21 @@ def build_waypoints(waypoints, track_width):
 	return new_waypoints
 
 def build_optimal_waypoints(waypoints, track_width):
-	global debug_enabled
-
-	optimal_waypoints = []
-
-	start_wp = waypoints[0]
-	distance = 0
-	before_wp = start_wp
-	delta = 0.3
-
-	_de = debug_enabled
-	debug_enabled = False
-
-	i = 0
-	while distance < 1 or get_distance(before_wp, start_wp) >= delta:
-		current_wp = get_point_on_waypoint(waypoints, 0, distance, start_wp)
-
-		wp_dist = get_distance(current_wp, before_wp)
-		if i > 0 and (wp_dist < delta * 0.9 or wp_dist > delta * 1.1):
-			log('too close or far waypoints:', before_wp, current_wp, "i=", i, "distance=", distance, "dist=", wp_dist)
-
-		#optimal_wp = current_wp
-		optimal_wp = get_optimal_position(waypoints, track_width, current_wp)
-		optimal_waypoints.append(optimal_wp)
-
-		if len(optimal_waypoints) >= 2:
-			owp_dist = get_distance(optimal_waypoints[-2], optimal_waypoints[-1])
-			if owp_dist < delta * 0.5 or owp_dist > delta * 1.5:
-				log('too close or far optimal waypoints:',
-					optimal_waypoints[-2], optimal_waypoints[-1], "i=", i, "distance=", distance, "dist=", owp_dist)
-
-		before_wp = current_wp
-		distance += delta
-		i += 1
-
-	optimal_waypoints.append(optimal_waypoints[0])
-
-	debug_enabled = _de
-	return optimal_waypoints
-
-# 현재 내 위치가 pt일 때, 여기에 대응하는 레코드 라인의 위치를 찾는다
-def get_optimal_position(waypoints, track_width, pt):
-	closest_waypoints = find_closest_waypoint_index(pt, waypoints)
-
-	# 이전부터 앞으로 track 방향이 어떻게 되는지 살펴본다.
-	angle_b2 = get_waypoint_direction(waypoints, closest_waypoints, pt, -1.4)
-	angle_b1 = get_waypoint_direction(waypoints, closest_waypoints, pt, -0.7)
-	angle_0 = get_waypoint_direction(waypoints, closest_waypoints, pt)
-	angle_f1 = get_waypoint_direction(waypoints, closest_waypoints, pt, 0.7)
-	angle_f2 = get_waypoint_direction(waypoints, closest_waypoints, pt, 1.4)
-
-	#debug('angles', angle_b2, angle_b1, angle_0, angle_f1, angle_f2)
-
-	# 이전 위치와의 각도 차이를 구함
-	# 왼쪽으로 구부러지면 마이너스, 반대쪽은 플러스
-	angle_b2_b1 = get_angle_diff(angle_b2, angle_b1)
-	angle_b1_0 = get_angle_diff(angle_b1, angle_0)
-	angle_0_f1 = get_angle_diff(angle_0, angle_f1)
-	angle_f1_f2 = get_angle_diff(angle_f1, angle_f2)
-
-	#debug("angle diffs: %.2f %.2f 0 %.2f %.2f"%(angle_b2_b1, angle_b1_0, angle_0_f1, angle_f1_f2))
-
-    # 트랙의 방향을 보고 현재 내가 있어야 할 위치(중심으로부터의 거리)를  찾는다.
-	max_angle = 25
-	rr1 = 0.4
-	rr2 = 1
-	rr3 = 1.4
-	rr4 = 0.6
-	r1 = convert_range(-max_angle, max_angle, 1, -1, angle_b2_b1) * rr1
-	r2 = convert_range(-max_angle, max_angle, -1, 1, angle_b1_0) * rr2
-	r3 = convert_range(-max_angle, max_angle, -1, 1, angle_0_f1) * rr3
-	r4 = convert_range(-max_angle, max_angle, 1, -1, angle_f1_f2) * rr4
-	# 중심으로부터 떨어진 거리. -는 왼쪽, +는 오른쪽.
-	r = (r1 + r2 + r3 + r4) / (rr1 + rr2 + rr3 + rr4) * track_width * 0.4
-
-	#debug("r: %.2f <= r1: %.2f r2: %.2f r3: %.2f r4: %.2f"%(r, r1, r2, r3, r4))
-
-	# optimal position
-	center = get_closest_point_from_line(pt, waypoints[closest_waypoints[0]], waypoints[closest_waypoints[1]])
-	#debug('center:', center, 'closest:', closest_waypoints)
-	op = rotate_point(center, (center[0], center[1] - r), angle_0)
-
-	return op
+	return build_waypoints(waypoints, track_width)
 
 def position_reward(params):
-	pt = (params['x'], params['y'])
-	waypoints = params['waypoints']
-	optimal_waypoints = params['x_optimal_waypoints']
-	optimal_index = params['x_optimal_index']
-	closest_waypoints = params['closest_waypoints']
 	track_width = params['track_width']
 	distance_from_center = params['distance_from_center']
 
-	marker3 = track_width * 0.48
-	if distance_from_center > marker3:
-		return 1e-3
+	marker1 = track_width * 0.15
+	marker2 = track_width * 0.48
 
-	prev_owp = optimal_waypoints[optimal_index[0]]
-	next_owp = optimal_waypoints[optimal_index[1]]
-	owp = get_closest_point_from_line(pt, prev_owp, next_owp)
-
-	dist_center_owp = get_distance_to_waypoint(owp, waypoints, closest_waypoints)
-	left_margin = max(0, track_width / 2 + dist_center_owp)
-	right_margin = max(0, track_width / 2 - dist_center_owp)
-	if left_margin == 0 or right_margin == 0:
-		log('too small margin. pt:', pt, 'left_margin:', left_margin, 'right_margin:', right_margin)
-
-	dist_owp_pt = get_distance_to_waypoint(pt, optimal_waypoints, optimal_index)
-
-	if dist_owp_pt <= 0: # pt가 optimal의 왼쪽에 있다
-		reward = convert_range(0, left_margin, 1, 0.1, abs(dist_owp_pt))
+	if distance_from_center < marker1:
+		reward = 1
+	elif distance_from_center < marker2:
+		reward = convert_range(0.9, 0.1, marker1, marker2, distance_from_center)
 	else:
-		reward = convert_range(0, right_margin, 1, 0.1, abs(dist_owp_pt))
-	
-	if reward <= 0.1:
-		reward = 0.001
+		reward = 0.01
 	
 	return reward
 
@@ -269,7 +169,7 @@ def fill_speeds(params):
 		speeds.sort()
 
 	if len(speeds) < 3:
-		debug('MAXSPEED is', speeds[-1])
+		log('MAXSPEED is', speeds[-1])
 	
 	return speed
 
@@ -278,7 +178,7 @@ def speed_reward(params):
 
 	speed = fill_speeds(params)
 	if len(speeds) <= 0 or speed == 0:
-		return 0.001
+	    return 0.001
 
 	max_speed = speeds[-1]
 	min_speed = speeds[0]
@@ -310,7 +210,7 @@ def speed_reward(params):
 	if joint_to_pt < min_joint_to_pt:
 		target_speed = min_speed
 	else:
-		target_speed = convert_range(math.sqrt(min_joint_to_pt), math.sqrt(max_joint_to_pt), min_speed, 8, math.sqrt(joint_to_pt))
+		target_speed = convert_range(math.sqrt(min_joint_to_pt), math.sqrt(max_joint_to_pt), min_speed, max_speed, math.sqrt(joint_to_pt))
 
 	closest_speed = target_speed
 	#closest_speed = get_closest_from_list(speeds, target_speed)
@@ -328,14 +228,14 @@ def speed_reward(params):
 
 def direction_reward(params):
 	pt = (params['x'], params['y'])
-	optimal_waypoints = params['x_optimal_waypoints']
-	optimal_index = params['x_optimal_index']
+	waypoints = params['waypoints']
+	closest_waypoints = params['closest_waypoints']
 	heading = params['heading']
-	track_width = params['track_width']
+	steering_angle = params['steering_angle']
 
-	angle_b1 = get_waypoint_direction(optimal_waypoints, optimal_index, pt, -0.7)
-	angle_0 = get_waypoint_direction(optimal_waypoints, optimal_index, pt)
-	angle_f1 = get_waypoint_direction(optimal_waypoints, optimal_index, pt, 0.7)
+	angle_b1 = get_waypoint_direction(waypoints, closest_waypoints, pt, -0.7)
+	angle_0 = get_waypoint_direction(waypoints, closest_waypoints, pt)
+	angle_f1 = get_waypoint_direction(waypoints, closest_waypoints, pt, 0.7)
 
 	angle_b1_0 = get_angle_diff(angle_b1, angle_0)
 	angle_0_f1 = get_angle_diff(angle_0, angle_f1)
@@ -347,23 +247,15 @@ def direction_reward(params):
 	#debug('pt:', pt, closest_waypoints)
 	#debug('straight: %.2f, angle_heading_0: %.2f'%(straight, angle_heading_0))
 
-	prev_owp = optimal_waypoints[optimal_index[0]]
-	next_owp = optimal_waypoints[optimal_index[1]]
-	dist_owp_pt = get_distance_to_line(pt, prev_owp, next_owp)
-
-	heading_diff = angle_heading_0 # 0이면 잘 따라가고 있는 것
-	# 현재 위치가 waypoint 에서 벗어나 있으면 heading_diff를 보정해서
-	# 중심을 향하고 싶게끔 점수를 준다.
-	corr = 12 if dist_owp_pt < 0 else -12
-	heading_diff += convert_range(0, track_width * 0.65, 0, corr, dist_owp_pt)
-
 	if straight:
-		reward = convert_range(3, 10, 1, 0.1, abs(heading_diff))
+		reward = convert_range(5, 25, 1, 0.001, abs(angle_heading_0))
 	else:
-		reward = convert_range(6, 15, 1, 0.1, abs(heading_diff))
+		reward = convert_range(20, 40, 1, 0.001, abs(angle_heading_0))
 
-	if reward <= 0.1:
-		reward = 0.001
+	if angle_0_f1 < -5 and steering_angle > 0:
+		reward *= 0.7
+	if angle_0_f1 > 5 and steering_angle < 0:
+		reward *= 0.7
 
 	return reward
 
