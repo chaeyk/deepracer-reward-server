@@ -109,6 +109,25 @@ def fix_waypoints(waypoints, is_reversed):
     return waypoints
 
 
+def reward_function(params):
+    fix_params_error(params)
+
+    p_reward = position_reward(params)
+    s_reward = speed_reward(params)
+    d_reward = direction_reward(params)
+    
+    progress = params['progress']
+    steps = params['steps']
+
+    if steps == 0:
+        pace = 0.5
+    else:
+        pace = progress * 1.5 / steps
+
+    reward = 10 * p_reward * s_reward * d_reward * pace
+    return reward
+
+
 # 시뮬레이터가 주는 waypoints는 간격도 제멋대로 엉망이라
 # 여기서 다시 촘촘하게 일정한 간격으로 만든다.
 def build_waypoints(waypoints, track_width):
@@ -150,7 +169,7 @@ def build_optimal_waypoints(waypoints, track_width):
     global debug_enabled
 
     # 주석 풀려있으면 waypoint 다시 만들지 않음
-    return waypoints
+    #return waypoints
 
     optimal_waypoints = []
 
@@ -233,27 +252,6 @@ def get_optimal_position(waypoints, track_width, pt):
 
     return op
 
-def reward_function(params):
-    fix_params_error(params)
-
-    p_reward = position_reward(params)
-    s_reward = speed_reward(params)
-    d_reward = direction_reward(params)
-    
-    progress = params['progress']
-    steps = params['steps']
-
-    if steps == 0:
-        pace = 0.5
-    else:
-        pace = progress * 1.5 / steps
-
-    debug('p_reward', p_reward, 's_reward', s_reward, 'd_reward', d_reward)
-    debug('progress:', progress, 'steps:', steps, 'pace:', pace)
-
-    reward = 10 * p_reward * s_reward * d_reward * pace
-    return reward
-
 def position_reward(params):
     pt = (params['x'], params['y'])
     waypoints = params['waypoints']
@@ -278,14 +276,13 @@ def position_reward(params):
         log('too small margin. pt:', pt, 'left_margin:', left_margin, 'right_margin:', right_margin)
 
     dist_owp_pt = get_distance_to_waypoint(pt, optimal_waypoints, optimal_index)
-    min_reward = 0.15
 
     if dist_owp_pt <= 0: # pt가 optimal의 왼쪽에 있다
-        reward = convert_range(0, left_margin, 1, min_reward, abs(dist_owp_pt))
+        reward = convert_range(0, left_margin * left_margin, 1, 0.1, dist_owp_pt * dist_owp_pt)
     else:
-        reward = convert_range(0, right_margin, 1, min_reward, abs(dist_owp_pt))
+        reward = convert_range(0, right_margin * right_margin, 1, 0.1, dist_owp_pt * dist_owp_pt)
     
-    if reward <= min_reward + 0.02:
+    if reward <= 0.1:
         reward = 0.001
     
     return reward

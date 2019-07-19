@@ -251,9 +251,9 @@ def position_reward(params):
 	min_reward = 0.1
 
 	if dist_owp_pt <= 0: # pt가 optimal의 왼쪽에 있다
-		reward = convert_range(0, left_margin, 1, min_reward, abs(dist_owp_pt))
+		reward = convert_range(0, left_margin * 0.8, 1, min_reward, abs(dist_owp_pt))
 	else:
-		reward = convert_range(0, right_margin, 1, min_reward, abs(dist_owp_pt))
+		reward = convert_range(0, right_margin * 0.8, 1, min_reward, abs(dist_owp_pt))
 	
 	if reward <= min_reward + 0.02:
 		reward = 0.001
@@ -296,7 +296,7 @@ def speed_reward(params):
 
 	# 현재 위치에서 직진할 때 어느 waypoint부터 트랙을 벗어나는지 조사한다.
 	max_joint_to_pt = 1.8 # 너무 멀리 볼 필요는 없어서...
-	min_joint_to_pt = 0.3
+	min_joint_to_pt = 0.4
 	wpindex = closest_waypoints[1]
 	joint_to_waypoint = 0
 	joint_to_pt = 0
@@ -357,7 +357,7 @@ def direction_reward(params):
 	# 현재 위치가 waypoint 에서 벗어나 있으면 heading_diff를 보정해서
 	# 중심을 향하고 싶게끔 점수를 준다.
 	corr = 12 if dist_owp_pt < 0 else -12
-	heading_diff += convert_range(0, track_width * 0.65, 0, corr, dist_owp_pt)
+	heading_diff += convert_range(0, track_width * 0.7, 0, corr, dist_owp_pt)
 
 	if straight:
 		reward = convert_range(3, 10, 1, 0.1, abs(heading_diff))
