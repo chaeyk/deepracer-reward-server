@@ -201,7 +201,7 @@ def reward_function(params):
         pace = progress * 1.5 / steps
 
     reward = 10 * p_reward * s_reward * d_reward * pace * pace
-    return reward
+    return max(0.001, reward)
 
 
 # 현재 내 위치가 pt일 때, 여기에 대응하는 레코드 라인의 위치를 찾는다
@@ -308,7 +308,7 @@ def speed_reward(params):
     if len(speeds) == 0:
         return 0.001
 
-    if speed < 3:
+    if speed < 3 and speed > 0:
         return 1
     else:
         return 0.001
