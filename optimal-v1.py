@@ -242,8 +242,8 @@ def position_reward(params):
 	owp = get_closest_point_from_line(pt, prev_owp, next_owp)
 
 	dist_center_owp = get_distance_to_waypoint(owp, waypoints, closest_waypoints)
-	left_margin = max(0, track_width / 2 + dist_center_owp)
-	right_margin = max(0, track_width / 2 - dist_center_owp)
+	left_margin = max(0, track_width / 2 + dist_center_owp) * 0.7
+	right_margin = max(0, track_width / 2 - dist_center_owp) * 0.7
 	if left_margin == 0 or right_margin == 0:
 		log('too small margin. pt:', pt, 'left_margin:', left_margin, 'right_margin:', right_margin)
 
@@ -251,9 +251,9 @@ def position_reward(params):
 	min_reward = 0.1
 
 	if dist_owp_pt <= 0: # pt가 optimal의 왼쪽에 있다
-		reward = convert_range(0, left_margin * left_margin * 0.8, 1, min_reward, dist_owp_pt * dist_owp_pt)
+		reward = convert_range(0, left_margin * left_margin, 1, min_reward, dist_owp_pt * dist_owp_pt)
 	else:
-		reward = convert_range(0, right_margin * right_margin * 0.8, 1, min_reward, dist_owp_pt * dist_owp_pt)
+		reward = convert_range(0, right_margin * right_margin, 1, min_reward, dist_owp_pt * dist_owp_pt)
 	
 	if reward <= min_reward + 0.02:
 		reward = 0.001
@@ -360,9 +360,9 @@ def direction_reward(params):
 	heading_diff += convert_range(0, track_width * 0.65, 0, corr, dist_owp_pt)
 
 	if straight:
-		reward = convert_range(5, 12, 1, 0.1, abs(heading_diff))
+		reward = convert_range(4, 10, 1, 0.1, abs(heading_diff))
 	else:
-		reward = convert_range(8, 20, 1, 0.1, abs(heading_diff))
+		reward = convert_range(7, 28, 1, 0.1, abs(heading_diff))
 
 	if reward <= 0.102:
 		reward = 0.001

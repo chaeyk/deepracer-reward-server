@@ -266,8 +266,8 @@ def position_reward(params):
     owp = get_closest_point_from_line(pt, prev_owp, next_owp)
 
     dist_center_owp = get_distance_to_waypoint(owp, waypoints, closest_waypoints)
-    left_margin = max(0, track_width / 2 + dist_center_owp) * 0.8
-    right_margin = max(0, track_width / 2 - dist_center_owp) * 0.8
+    left_margin = max(0, track_width / 2 + dist_center_owp) * 0.5
+    right_margin = max(0, track_width / 2 - dist_center_owp) * 0.5
     if left_margin == 0 or right_margin == 0:
         log('too small margin. pt:', pt, 'left_margin:', left_margin, 'right_margin:', right_margin)
 
@@ -308,7 +308,7 @@ def speed_reward(params):
     if len(speeds) == 0:
         return 0.001
 
-    if speed < 3 and speed > 0:
+    if speed < 6 and speed > 0:
         return 1
     else:
         return 0.001
