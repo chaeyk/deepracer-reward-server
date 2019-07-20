@@ -111,7 +111,7 @@ def build_waypoints(waypoints, track_width):
     global debug_enabled
 
     # 주석 풀려있으면 waypoint 다시 만들지 않음
-    #return waypoints
+    return waypoints
 
     new_waypoints = []
 
@@ -185,25 +185,6 @@ def build_optimal_waypoints(waypoints, track_width):
     debug_enabled = _de
     return optimal_waypoints
 
-def reward_function(params):
-    fix_params_error(params)
-
-    p_reward = position_reward(params)
-    s_reward = speed_reward(params)
-    d_reward = direction_reward(params)
-    
-    progress = params['progress']
-    steps = params['steps']
-
-    if steps == 0:
-        pace = 0.5
-    else:
-        pace = progress * 1.5 / steps
-
-    reward = 10 * p_reward * s_reward * d_reward * pace * pace
-    return max(0.001, reward)
-
-
 # 현재 내 위치가 pt일 때, 여기에 대응하는 레코드 라인의 위치를 찾는다
 def get_optimal_position(waypoints, track_width, pt):
     closest_waypoints = find_closest_waypoint_index(pt, waypoints)
@@ -248,6 +229,25 @@ def get_optimal_position(waypoints, track_width, pt):
 
     return op
 
+def reward_function(params):
+    fix_params_error(params)
+
+    p_reward = position_reward(params)
+    s_reward = speed_reward(params)
+    d_reward = direction_reward(params)
+    
+    progress = params['progress']
+    steps = params['steps']
+
+    if steps == 0:
+        pace = 0.5
+    else:
+        pace = progress * 1.5 / steps
+
+    reward = 10 * p_reward * s_reward * d_reward * pace * pace
+    return max(0.001, reward)
+
+
 def position_reward(params):
     pt = (params['x'], params['y'])
     waypoints = params['waypoints']
@@ -266,8 +266,8 @@ def position_reward(params):
     owp = get_closest_point_from_line(pt, prev_owp, next_owp)
 
     dist_center_owp = get_distance_to_waypoint(owp, waypoints, closest_waypoints)
-    left_margin = max(0, track_width / 2 + dist_center_owp)
-    right_margin = max(0, track_width / 2 - dist_center_owp)
+    left_margin = max(0, track_width / 2 + dist_center_owp) * 0.8
+    right_margin = max(0, track_width / 2 - dist_center_owp) * 0.8
     if left_margin == 0 or right_margin == 0:
         log('too small margin. pt:', pt, 'left_margin:', left_margin, 'right_margin:', right_margin)
 
@@ -345,9 +345,9 @@ def direction_reward(params):
 	heading_diff += convert_range(0, track_width * 0.7, 0, corr, dist_owp_pt)
 
 	if straight:
-		reward = convert_range(3, 10, 1, 0.1, abs(heading_diff))
+		reward = convert_range(3 * 3, 10 * 10, 1, 0.1, heading_diff * heading_diff)
 	else:
-		reward = convert_range(6, 15, 1, 0.1, abs(heading_diff))
+		reward = convert_range(6 * 6, 15 * 15, 1, 0.1, heading_diff * heading_diff)
 
 	if reward <= 0.1:
 		reward = 0.001
