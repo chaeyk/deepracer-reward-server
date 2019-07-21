@@ -315,7 +315,7 @@ def speed_reward(params):
     elif speed < 6:
         return 4
     else:
-        return 0.001
+        return 9
 
 def direction_reward(params):
 	pt = (params['x'], params['y'])

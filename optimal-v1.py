@@ -233,7 +233,7 @@ def position_reward(params):
 	track_width = params['track_width']
 	distance_from_center = params['distance_from_center']
 
-	marker3 = track_width * 0.48
+	marker3 = track_width * 0.35
 	if distance_from_center > marker3:
 		return 1e-3
 
@@ -242,8 +242,8 @@ def position_reward(params):
 	owp = get_closest_point_from_line(pt, prev_owp, next_owp)
 
 	dist_center_owp = get_distance_to_waypoint(owp, waypoints, closest_waypoints)
-	left_margin = max(0, track_width / 2 + dist_center_owp)
-	right_margin = max(0, track_width / 2 - dist_center_owp)
+	left_margin = max(0, track_width / 2 + dist_center_owp) * 0.7
+	right_margin = max(0, track_width / 2 - dist_center_owp) * 0.7
 	if left_margin == 0 or right_margin == 0:
 		log('too small margin. pt:', pt, 'left_margin:', left_margin, 'right_margin:', right_margin)
 
