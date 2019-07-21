@@ -308,8 +308,12 @@ def speed_reward(params):
     if len(speeds) == 0:
         return 0.001
 
-    if speed < 6 and speed > 0:
+    if speed <= 0.1:
+        return 0.001
+    elif speed < 3:
         return 1
+    elif speed < 6:
+        return 4
     else:
         return 0.001
 

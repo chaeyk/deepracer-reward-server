@@ -90,16 +90,6 @@ def fix_waypoints(waypoints, is_reversed):
 
 	return waypoints
 
-def reward_function(params):
-	fix_params_error(params)
-
-	p_reward = position_reward(params)
-	s_reward = speed_reward(params)
-	d_reward = direction_reward(params)
-
-	#return min(p_reward, s_reward, d_reward)
-	return max(0.001, p_reward * s_reward * d_reward)
-
 # 시뮬레이터가 주는 waypoints는 간격도 제멋대로 엉망이라
 # 여기서 다시 촘촘하게 일정한 간격으로 만든다.
 def build_waypoints(waypoints, track_width):
@@ -224,6 +214,16 @@ def get_optimal_position(waypoints, track_width, pt):
 
 	return op
 
+def reward_function(params):
+	fix_params_error(params)
+
+	p_reward = position_reward(params)
+	s_reward = speed_reward(params)
+	d_reward = direction_reward(params)
+
+	#return min(p_reward, s_reward, d_reward)
+	return max(0.001, p_reward * s_reward * d_reward)
+
 def position_reward(params):
 	pt = (params['x'], params['y'])
 	waypoints = params['waypoints']
@@ -242,8 +242,8 @@ def position_reward(params):
 	owp = get_closest_point_from_line(pt, prev_owp, next_owp)
 
 	dist_center_owp = get_distance_to_waypoint(owp, waypoints, closest_waypoints)
-	left_margin = max(0, track_width / 2 + dist_center_owp) * 0.7
-	right_margin = max(0, track_width / 2 - dist_center_owp) * 0.7
+	left_margin = max(0, track_width / 2 + dist_center_owp)
+	right_margin = max(0, track_width / 2 - dist_center_owp)
 	if left_margin == 0 or right_margin == 0:
 		log('too small margin. pt:', pt, 'left_margin:', left_margin, 'right_margin:', right_margin)
 
@@ -283,7 +283,7 @@ def speed_reward(params):
 	speed = fill_speeds(params)
 
 	max_speed = 8
-	min_speed = 0.7
+	min_speed = 2.3
 	
 	pt = (params['x'], params['y'])
 	waypoints = params['waypoints']
@@ -296,7 +296,7 @@ def speed_reward(params):
 
 	# 현재 위치에서 직진할 때 어느 waypoint부터 트랙을 벗어나는지 조사한다.
 	max_joint_to_pt = 1.8 # 너무 멀리 볼 필요는 없어서...
-	min_joint_to_pt = 0.3
+	min_joint_to_pt = 0.2
 	wpindex = closest_waypoints[1]
 	joint_to_waypoint = 0
 	joint_to_pt = 0
