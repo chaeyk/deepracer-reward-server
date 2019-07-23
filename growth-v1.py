@@ -356,7 +356,7 @@ def speed_reward(params):
 
     if joint_to_pt < 1 and speed > 7:
         return 0.001
-    elif joint_to_pt > 1.5 and speed < 3:
+    elif joint_to_pt > 1 and speed < 3:
         return 0.001
 
     if speed <= 0.1:
@@ -366,7 +366,7 @@ def speed_reward(params):
     elif speed < 6:
         return 4
     else:
-        return 6
+        return 8
 
 def direction_reward(params):
     pt = (params['x'], params['y'])
