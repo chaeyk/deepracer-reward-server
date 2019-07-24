@@ -229,6 +229,9 @@ def get_optimal_position(waypoints, track_width, pt):
 
 	return op
 
+def ff(v):
+    return "{:.2f}".format(v)
+
 reward_sum = 0
 def reward_function(params):
 	global reward_sum
@@ -248,13 +251,15 @@ def reward_function(params):
 	else:
 		pace = progress * 1.5 / steps
 
-	reward = 10 * p_reward * s_reward * d_reward * pace * pace
+	reward = 4 * p_reward * s_reward * d_reward
 	reward_sum += reward
 	
 	if params['progress'] == 100:
-		bonus = 500
+		time = steps / 15.0
+		#bonus = 2500 + convert_range(7, 17, 5000, 0, time) - reward_sum
+		bonus = 1000 + convert_range(7, 17, 3000, 0, time)
 		reward += bonus
-		log('bonus', int(bonus), 'reward sum', int(reward_sum), 'result', int(bonus + reward_sum), 'time', (steps / 15.0), 'ratio', bonus / reward_sum)    
+		log('bonus', int(bonus), 'reward sum', int(reward_sum), 'result', int(bonus + reward_sum), 'time', ff(time), 'pace', ff(pace), 'ratio', ff(bonus / reward_sum))
 	
 	return max(0.001, reward)
 
