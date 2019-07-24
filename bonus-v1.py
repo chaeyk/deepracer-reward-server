@@ -256,8 +256,8 @@ def reward_function(params):
 	
 	if params['progress'] == 100:
 		time = steps / 15.0
-		#bonus = 2500 + convert_range(7, 17, 5000, 0, time) - reward_sum
-		bonus = 1000 + convert_range(7, 17, 3000, 0, time)
+		#bonus = 2500 + convert_range(7, 18, 5000, -500, time) - reward_sum
+		bonus = 1000 + convert_range(7, 18, 3000, -300, time)
 		reward += bonus
 		log('bonus', int(bonus), 'reward sum', int(reward_sum), 'result', int(bonus + reward_sum), 'time', ff(time), 'pace', ff(pace), 'ratio', ff(bonus / reward_sum))
 	
