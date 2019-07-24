@@ -65,7 +65,7 @@ def fix_params_error(params):
     pt = (params['x'], params['y'])
     closest_waypoints = find_closest_waypoint_index(pt, rebuilt_waypoints)
     old_closest_waypoints = params['closest_waypoints']
-    if len(waypoints) == len(rebuilt_waypoints) and (closest_waypoints[0] != old_closest_waypoints[0] or closest_waypoints[1] != old_closest_waypoints[1]):
+    if closest_waypoints[0] != old_closest_waypoints[0] or closest_waypoints[1] != old_closest_waypoints[1]:
         log('closest_waypoints is different with mine: {} != {} (pt={})'
             .format(old_closest_waypoints, closest_waypoints, pt))
     params['closest_waypoints'] = closest_waypoints
@@ -111,14 +111,14 @@ def build_waypoints(waypoints, track_width):
     global debug_enabled
 
     # 주석 풀려있으면 waypoint 다시 만들지 않음
-    #return waypoints
+    return waypoints
 
     new_waypoints = []
 
     start_wp = waypoints[0]
     distance = 0
     before_wp = start_wp
-    delta = 0.2
+    delta = 0.1
 
     _de = debug_enabled
     debug_enabled = False
@@ -229,7 +229,10 @@ def get_optimal_position(waypoints, track_width, pt):
 
     return op
 
+reward_sum = 0
 def reward_function(params):
+    global reward_sum
+    
     fix_params_error(params)
 
     p_reward = position_reward(params)
@@ -241,10 +244,18 @@ def reward_function(params):
 
     if steps == 0:
         pace = 0.5
+        reward_sum =0
     else:
         pace = progress * 1.5 / steps
 
     reward = 10 * p_reward * s_reward * d_reward * pace * pace
+    reward_sum += reward
+    
+    if params['progress'] == 100:
+        bonus = max(0, (pace * 2000 - 1300) * 6 + 1000)
+        reward += bonus
+        log('bonus', int(bonus), 'reward sum', int(reward_sum), 'result', int(bonus + reward_sum), 'time', (steps / 15.0), 'ratio', bonus / reward_sum)    
+    
     return max(0.001, reward)
 
 
@@ -308,57 +319,6 @@ def speed_reward(params):
     if len(speeds) == 0:
         return 0.001
 
-    pt = (params['x'], params['y'])
-    waypoints = params['waypoints']
-    closest_waypoints = params['closest_waypoints']
-    optimal_waypoints = params['x_optimal_waypoints']
-    optimal_index = params['x_optimal_index']
-
-    track_width = params['track_width']
-    heading = params['heading']
-
-    # pt가 가는 방향의 연장선
-    pt2 = (math.cos(math.radians(heading)) + pt[0], math.sin(math.radians(heading)) + pt[1])
-
-    ##################
-    # 현재 위치에서 직진할 때 어느 waypoint부터 트랙을 벗어나는지 조사한다.
-    max_joint_to_pt = 1.8 # 너무 멀리 볼 필요는 없어서...
-
-    # waypoint 기준
-    wpindex = closest_waypoints[1]
-    wjoint_to_wp = 0
-    wjoint_to_pt = 0
-    while wjoint_to_wp < track_width / 2 and wjoint_to_pt < max_joint_to_pt:
-        wp = waypoints[wpindex]
-
-        joint = get_closest_point_from_line(wp, pt, pt2)
-        wjoint_to_wp = get_distance(wp, joint)
-        wjoint_to_pt = get_distance(pt, joint)
-
-        wpindex = next_waypoint_index(waypoints, wpindex)
-
-    # optimal wapoint 기준
-    owpindex = optimal_index[1]
-    owjoint_to_wp = 0
-    owjoint_to_pt = 0
-    while owjoint_to_wp < track_width / 2 and owjoint_to_pt < max_joint_to_pt:
-        owp = optimal_waypoints[owpindex]
-
-        joint = get_closest_point_from_line(owp, pt, pt2)
-        owjoint_to_wp = get_distance(owp, joint)
-        owjoint_to_pt = get_distance(pt, joint)
-
-        owpindex = next_waypoint_index(optimal_waypoints, owpindex)
-
-    joint_to_pt = min(wjoint_to_pt, owjoint_to_pt)
-
-    debug('joint_to_pt:', joint_to_pt, 'wjoint_to_pt:', wjoint_to_pt, 'owjoint_to_pt:', owjoint_to_pt)
-
-    if joint_to_pt < 1 and speed > 7:
-        return 0.001
-    elif joint_to_pt > 1 and speed < 3:
-        return 0.001
-
     if speed <= 0.1:
         return 0.001
     elif speed < 3:
@@ -369,52 +329,45 @@ def speed_reward(params):
         return 8
 
 def direction_reward(params):
-    pt = (params['x'], params['y'])
-    optimal_waypoints = params['x_optimal_waypoints']
-    optimal_index = params['x_optimal_index']
-    heading = params['heading']
-    track_width = params['track_width']
-    steering_angle = params['steering_angle']
+	pt = (params['x'], params['y'])
+	optimal_waypoints = params['x_optimal_waypoints']
+	optimal_index = params['x_optimal_index']
+	heading = params['heading']
+	track_width = params['track_width']
 
-    angle_b1 = get_waypoint_direction(optimal_waypoints, optimal_index, pt, -0.7)
-    angle_0 = get_waypoint_direction(optimal_waypoints, optimal_index, pt)
-    angle_f1 = get_waypoint_direction(optimal_waypoints, optimal_index, pt, 0.7)
+	angle_b1 = get_waypoint_direction(optimal_waypoints, optimal_index, pt, -0.7)
+	angle_0 = get_waypoint_direction(optimal_waypoints, optimal_index, pt)
+	angle_f1 = get_waypoint_direction(optimal_waypoints, optimal_index, pt, 0.7)
 
-    angle_b1_0 = get_angle_diff(angle_b1, angle_0)
-    angle_0_f1 = get_angle_diff(angle_0, angle_f1)
+	angle_b1_0 = get_angle_diff(angle_b1, angle_0)
+	angle_0_f1 = get_angle_diff(angle_0, angle_f1)
 
-    angle_heading_0 = get_angle_diff(heading, angle_0)
+	angle_heading_0 = get_angle_diff(heading, angle_0)
 
-    straight = abs(angle_b1_0) < 5 and abs(angle_0_f1) < 5
+	straight = abs(angle_b1_0) < 5 and abs(angle_0_f1) < 5
 
-    #debug('pt:', pt, closest_waypoints)
-    debug('straight: %.2f, angle_heading_0: %.2f'%(straight, angle_heading_0))
+	#debug('pt:', pt, closest_waypoints)
+	#debug('straight: %.2f, angle_heading_0: %.2f'%(straight, angle_heading_0))
 
-    prev_owp = optimal_waypoints[optimal_index[0]]
-    next_owp = optimal_waypoints[optimal_index[1]]
-    dist_owp_pt = get_distance_to_line(pt, prev_owp, next_owp)
+	prev_owp = optimal_waypoints[optimal_index[0]]
+	next_owp = optimal_waypoints[optimal_index[1]]
+	dist_owp_pt = get_distance_to_line(pt, prev_owp, next_owp)
 
-    heading_diff = angle_heading_0 # 0이면 잘 따라가고 있는 것
-    # 현재 위치가 waypoint 에서 벗어나 있으면 heading_diff를 보정해서
-    # 중심을 향하고 싶게끔 점수를 준다.
-    corr = 12 if dist_owp_pt < 0 else -12
-    heading_diff += convert_range(0, track_width * 0.7, 0, corr, dist_owp_pt)
+	heading_diff = angle_heading_0 # 0이면 잘 따라가고 있는 것
+	# 현재 위치가 waypoint 에서 벗어나 있으면 heading_diff를 보정해서
+	# 중심을 향하고 싶게끔 점수를 준다.
+	corr = 12 if dist_owp_pt < 0 else -12
+	heading_diff += convert_range(0, track_width * 0.7, 0, corr, abs(dist_owp_pt))
 
-    if straight:
-        reward = convert_range(3 * 3, 10 * 10, 1, 0.1, heading_diff * heading_diff)
-    else:
-        reward = convert_range(6 * 6, 15 * 15, 1, 0.1, heading_diff * heading_diff)
+	if straight:
+		reward = convert_range(3 * 3, 10 * 10, 1, 0.1, heading_diff * heading_diff)
+	else:
+		reward = convert_range(6 * 6, 15 * 15, 1, 0.1, heading_diff * heading_diff)
 
-    debug('heading_diff:', heading_diff)
-    if heading_diff < -3 and steering_angle < 0:
-        reward = 0.001
-    elif heading_diff > 3 and steering_angle > 0:
-        reward = 0.001
+	if reward <= 0.1:
+		reward = 0.001
 
-    if reward <= 0.1:
-        reward = 0.001
-
-    return reward
+	return reward
 
 ############################################################################
 # DMath
